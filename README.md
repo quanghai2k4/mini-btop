@@ -17,7 +17,7 @@ Real-time web-based system monitor inspired by btop.
 
 **Backend:**
 - Go + gopsutil for system metrics
-- Server-Sent Events (SSE)
+- Server-Sent Events (SSE) with Hub broadcast pattern
 
 **Frontend:**
 - React 18 + TypeScript + Vite
@@ -35,20 +35,17 @@ Real-time web-based system monitor inspired by btop.
 
 ### Prerequisites
 
-- Nix with flakes enabled
-- AWS account (for deployment)
+- [Nix](https://nixos.org/download.html) with flakes enabled
+- AWS account with credentials
 
-### Development
+### Local Development
 
 ```bash
 # Enter dev environment
 nix develop
 
-# Install frontend dependencies
-cd frontend && npm install && cd ..
-
-# Build frontend
-cd frontend && npm run build && cd ..
+# Install frontend dependencies & build
+cd frontend && npm install && npm run build && cd ..
 
 # Run server
 go build -o monitor ./cmd/monitor
@@ -57,16 +54,83 @@ go build -o monitor ./cmd/monitor
 
 Open http://localhost:8080
 
-### Production Deployment
+## Deploy to AWS EC2
+
+### Step 1: Clone and enter environment
 
 ```bash
-# Configure Terraform
-cp terraform/terraform.tfvars.example terraform/terraform.tfvars
-# Edit with your AWS key name
+git clone https://github.com/quanghai2k4/mini-btop.git
+cd mini-btop
+nix develop
+```
 
-# Full deployment
+### Step 2: Configure AWS
+
+```bash
+aws configure
+# Enter: Access Key ID, Secret Access Key, Region (e.g., ap-southeast-1)
+```
+
+### Step 3: Deploy
+
+```bash
 make up
 ```
+
+This will automatically:
+1. Create SSH key and upload to AWS
+2. Build Go binary and frontend
+3. Create EC2 instance with Terraform
+4. Deploy application with Ansible
+
+After deployment:
+```
+==========================================
+  Deployment complete!
+  URL: http://13.xxx.xxx.xxx
+==========================================
+```
+
+### Custom SSH Key Name
+
+When deploying from multiple machines to the same AWS account, use different key names:
+
+```bash
+make up KEY_NAME=mini-btop-laptop
+make up KEY_NAME=mini-btop-work
+```
+
+### Destroy Infrastructure
+
+```bash
+make down
+```
+
+### Delete SSH Key
+
+```bash
+make clean-key                      # Delete default key
+make clean-key KEY_NAME=mini-btop   # Delete specific key
+```
+
+## Makefile Commands
+
+| Command | Description |
+|---------|-------------|
+| `make up` | Full deployment (key + build + terraform + ansible) |
+| `make down` | Destroy EC2 infrastructure |
+| `make status` | Check deployment and key status |
+| `make setup-key` | Create and upload SSH key to AWS |
+| `make clean-key` | Delete SSH key from AWS |
+| `make artifact` | Build release package |
+| `make tf-apply` | Create infrastructure only |
+| `make ans-deploy` | Deploy application only |
+
+### Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `KEY_NAME` | `mini-btop` | SSH key pair name |
 
 ## Project Structure
 
@@ -79,28 +143,21 @@ mini-btop/
 │   │   ├── App.tsx           # Main dashboard
 │   │   ├── components/
 │   │   │   ├── MetricCard.tsx        # Stat card with chart
+│   │   │   ├── NetworkChart.tsx      # Lazy-loaded sparkline
 │   │   │   ├── DeploymentStatus.tsx  # Terminal log panel
 │   │   │   └── ui/                   # Shadcn components
 │   │   ├── hooks/useSystemMetrics.ts
 │   │   └── types/metrics.ts
 │   └── package.json
-├── static/                   # Built frontend (gitignored)
+├── scripts/
+│   ├── setup-key.sh          # SSH key setup script
+│   └── clean-key.sh          # SSH key cleanup script
 ├── terraform/                # AWS EC2 infrastructure
 ├── ansible/                  # Deployment playbooks
 ├── nginx/                    # Nginx config
 ├── systemd/                  # Service file
 ├── flake.nix                 # Nix dev environment
 └── Makefile
-```
-
-## Makefile Commands
-
-```bash
-make artifact    # Build release artifact
-make tf-apply    # Create EC2 infrastructure
-make ans-deploy  # Deploy application
-make up          # Full deployment
-make down        # Destroy infrastructure
 ```
 
 ## Metrics Collected
@@ -113,6 +170,42 @@ make down        # Destroy infrastructure
 | Network | RX/TX rates with sparkline |
 | Uptime | System uptime |
 | Load Average | 1/5/15 minute |
+
+## Troubleshooting
+
+### SSH into EC2
+
+```bash
+ssh -i ~/.ssh/mini-btop ubuntu@<public-ip>
+```
+
+### Check service status
+
+```bash
+sudo systemctl status mini-btop
+sudo journalctl -u mini-btop -f
+```
+
+### Key mismatch error
+
+If deploying from a new machine but AWS key already exists:
+
+```bash
+# Option 1: Use different key name
+make up KEY_NAME=mini-btop-newmachine
+
+# Option 2: Delete old key and recreate
+make clean-key
+make up
+```
+
+## Cost Estimate
+
+| Resource | Cost |
+|----------|------|
+| EC2 t3.micro | ~$8.5/month (or free tier) |
+| EBS 8GB | ~$0.8/month |
+| **Total** | **~$9.3/month** |
 
 ## License
 
