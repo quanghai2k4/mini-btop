@@ -84,15 +84,16 @@ func (c *Collector) Collect() (*SystemMetrics, error) {
 		metrics.Hostname = "Unknown"
 	}
 
-	// CPU metrics
-	cpuPercent, err := cpu.Percent(0, false)
-	if err == nil && len(cpuPercent) > 0 {
-		metrics.CPU.Total = cpuPercent[0]
-	}
-
+	// CPU metrics - single call, calculate total from per-core
 	cpuPerCore, err := cpu.Percent(0, true)
-	if err == nil {
+	if err == nil && len(cpuPerCore) > 0 {
 		metrics.CPU.PerCore = cpuPerCore
+		// Calculate total as average of all cores
+		var total float64
+		for _, c := range cpuPerCore {
+			total += c
+		}
+		metrics.CPU.Total = total / float64(len(cpuPerCore))
 	}
 
 	// Memory metrics

@@ -22,5 +22,13 @@ export default defineConfig({
   build: {
     outDir: '../static',
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor': ['react', 'react-dom'],
+          'charts': ['recharts'],
+        },
+      },
+    },
   },
 })
