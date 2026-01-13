@@ -36,6 +36,7 @@
             # Build tools
             gnumake
             git
+            gh
 
             # Utilities
             jq
