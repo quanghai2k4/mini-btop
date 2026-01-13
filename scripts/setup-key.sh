@@ -94,12 +94,21 @@ echo "    Private key: $KEY_PATH"
 echo "    Public key:  $KEY_PATH.pub"
 echo ""
 
-# Write key name to terraform.tfvars if not exists
+# Write terraform.tfvars if not exists
 TFVARS="terraform/terraform.tfvars"
 if [ ! -f "$TFVARS" ]; then
-    echo "key_name = \"$KEY_NAME\"" > "$TFVARS"
+    cat > "$TFVARS" << EOF
+# SSH key pair name (created by setup-key.sh)
+key_name = "$KEY_NAME"
+
+# AWS region
+aws_region = "ap-southeast-1"
+
+# EC2 instance type
+instance_type = "t3.micro"
+EOF
     echo "    Created: $TFVARS"
 elif ! grep -q "key_name" "$TFVARS"; then
     echo "key_name = \"$KEY_NAME\"" >> "$TFVARS"
-    echo "    Updated: $TFVARS"
+    echo "    Updated: $TFVARS (added key_name)"
 fi
