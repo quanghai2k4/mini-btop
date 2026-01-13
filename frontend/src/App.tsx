@@ -1,5 +1,5 @@
 import { useSystemMetrics } from '@/hooks/useSystemMetrics';
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { MetricCard } from '@/components/MetricCard';
 import { DeploymentStatus } from '@/components/DeploymentStatus';
 import { Badge } from '@/components/ui/badge';
@@ -7,16 +7,16 @@ import { Cpu, MemoryStick, HardDrive, Wifi, Moon, Sun, Server } from 'lucide-rea
 import { formatBytes, formatGB, formatUptime } from '@/lib/utils';
 
 const HISTORY_SIZE = 20;
+const UPDATE_INTERVAL = 500; // ms
 
 function App() {
   const { metrics, connected } = useSystemMetrics();
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   
-  // Circular buffer for network history - O(1) updates
+  // Simple queue for network history - always ordered oldest to newest
   const [networkHistory, setNetworkHistory] = useState<{ value: number }[]>(
     () => Array(HISTORY_SIZE).fill({ value: 0 })
   );
-  const historyIndexRef = useRef(0);
   const lastUpdateRef = useRef(0);
 
   useEffect(() => {
@@ -26,21 +26,20 @@ function App() {
     document.documentElement.classList.toggle('dark', savedTheme === 'dark');
   }, []);
 
-  // Update network history with circular buffer
+  // Update network history - push new, remove old
   useEffect(() => {
     if (metrics) {
       const now = Date.now();
       
-      // Throttle updates to every 500ms
-      if (now - lastUpdateRef.current > 500) {
+      // Throttle updates
+      if (now - lastUpdateRef.current >= UPDATE_INTERVAL) {
         lastUpdateRef.current = now;
         const totalRate = (metrics.network.rxRate + metrics.network.txRate) / 1024; // KB/s
         
         setNetworkHistory(prev => {
-          const newHistory = [...prev];
-          newHistory[historyIndexRef.current] = { value: totalRate };
-          historyIndexRef.current = (historyIndexRef.current + 1) % HISTORY_SIZE;
-          return newHistory;
+          // Push new value, remove oldest - keeps array ordered
+          const next = [...prev.slice(1), { value: totalRate }];
+          return next;
         });
       }
     }
@@ -55,8 +54,8 @@ function App() {
     });
   }, []);
 
-  // Reorder history for display (oldest to newest)
-  const orderedHistory = [...networkHistory.slice(historyIndexRef.current), ...networkHistory.slice(0, historyIndexRef.current)];
+  // Memoize chart data to prevent unnecessary re-renders
+  const chartData = useMemo(() => networkHistory, [networkHistory]);
 
   if (!metrics) {
     return (
@@ -153,7 +152,7 @@ function App() {
           subValue={`Down ${formatBytes(metrics.network.rxRate)}/s · Up ${formatBytes(metrics.network.txRate)}/s`}
           icon={Wifi}
           useChart={true}
-          chartData={orderedHistory}
+          chartData={chartData}
           iconColor="text-emerald-500"
           iconBgColor="bg-emerald-500/10 dark:bg-emerald-500/20"
           gradientId="networkGradient"

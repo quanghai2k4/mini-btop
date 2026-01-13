@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Area, AreaChart, ResponsiveContainer } from 'recharts';
 
 interface NetworkChartProps {
@@ -6,7 +7,7 @@ interface NetworkChartProps {
   gradientColor: string;
 }
 
-export default function NetworkChart({ data, gradientId, gradientColor }: NetworkChartProps) {
+function NetworkChartInner({ data, gradientId, gradientColor }: NetworkChartProps) {
   return (
     <div className="h-[40px] w-full mt-2">
       <ResponsiveContainer width="100%" height="100%">
@@ -24,10 +25,14 @@ export default function NetworkChart({ data, gradientId, gradientColor }: Networ
             strokeWidth={2}
             fillOpacity={1}
             fill={`url(#${gradientId})`}
-            isAnimationActive={false}
+            isAnimationActive={true}
+            animationDuration={300}
+            animationEasing="ease-out"
           />
         </AreaChart>
       </ResponsiveContainer>
     </div>
   );
 }
+
+export default memo(NetworkChartInner);
