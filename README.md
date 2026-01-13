@@ -1,222 +1,118 @@
 # mini-btop
 
-Real-time Web System Monitor with btop-style TUI interface
+Real-time web-based system monitor inspired by btop.
+
+![Dashboard Preview](https://img.shields.io/badge/status-online-brightgreen) ![Go](https://img.shields.io/badge/Go-1.25-00ADD8) ![React](https://img.shields.io/badge/React-18-61DAFB) ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6)
 
 ## Features
 
-- **Terminal-style UI in browser** - Box-drawing characters, ASCII bars, Unicode sparklines
-- **Real-time metrics** - CPU (total + per-core), Memory, Disk, Network
-- **Smooth animations** - 60fps updates with interpolation
-- **btop-inspired design** - Looks like running btop in terminal
-- **Server-Sent Events (SSE)** - Efficient real-time streaming
+- **Real-time metrics** - CPU, Memory, Disk, Network with live updates
+- **Modern dark UI** - Vercel/Linear inspired dashboard design
+- **SSE streaming** - Efficient Server-Sent Events for real-time data
+- **Deployment terminal** - CRT-style deployment log with scanline effect
 - **Lightweight** - Runs on t3.micro (1GB RAM)
-- **Complete DevOps** - Nix, Terraform, Ansible
+- **Complete DevOps** - Nix Flakes, Terraform, Ansible, systemd
 
-## UI Preview
+## Tech Stack
 
-```
-┌─ CPU ─────────────────────────────────────────────┐
-│ Total:  45.2% ████████████████░░░░░░░░░░░░░░░░░░│
-│ ▁▂▃▄▅▆▇█▇▆▅▄▃▂▁▂▃▄▅▆▇█▇▆▅▄▃▂▁▂▃▄▅▆▇█▇▆          │
-│ Core  0:  42.1% ████████████████░░░░░░░░░░░░    │
-│ Core  1:  48.3% ██████████████████░░░░░░░░░░    │
-└───────────────────────────────────────────────────┘
+**Backend:**
+- Go + gopsutil for system metrics
+- Server-Sent Events (SSE)
 
-┌─ Memory ──────────────────────────────────────────┐
-│ Used: 6.2G / 16.0G (38.8%)                       │
-│ ███████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░│
-│ ▁▂▂▃▃▄▅▆▇█▇▆▅▄▃▂▁▂▃▄▅▆▇█▇▆▅▄▃▂                  │
-└───────────────────────────────────────────────────┘
-```
+**Frontend:**
+- React 18 + TypeScript + Vite
+- Tailwind CSS + Shadcn UI
+- Recharts for sparkline graphs
 
-## Prerequisites
-
-- Nix with flakes enabled
-- AWS account with credentials (for deployment)
-- SSH key pair for EC2 access
+**Infrastructure:**
+- Nix Flakes (reproducible dev environment)
+- Terraform (AWS EC2)
+- Ansible (configuration management)
+- Nginx (reverse proxy)
+- systemd (service management)
 
 ## Quick Start
 
-### 1. Enter development environment
+### Prerequisites
+
+- Nix with flakes enabled
+- AWS account (for deployment)
+
+### Development
 
 ```bash
-nix develop --impure
-```
+# Enter dev environment
+nix develop
 
-### 2. Run locally (development)
+# Install frontend dependencies
+cd frontend && npm install && cd ..
 
-**Option 1: Using helper script (recommended)**
-```bash
-./run.sh
-# Press Ctrl+C to stop
-```
+# Build frontend
+cd frontend && npm run build && cd ..
 
-**Option 2: Build and run binary**
-```bash
+# Run server
 go build -o monitor ./cmd/monitor
 ./monitor
-# Press Ctrl+C to stop
 ```
 
-**Option 3: Direct go run**
-```bash
-go run ./cmd/monitor
-# Note: Ctrl+C may not work with go run
-# Use build method above for proper signal handling
-```
+Open http://localhost:8080
 
-Then open browser:
-```bash
-open http://localhost:8080
-```
-
-You'll see a btop-style TUI interface with:
-- Box-drawing characters (┌─┐│└┘)
-- ASCII progress bars (░▒▓█)
-- Unicode sparklines (▁▂▃▄▅▆▇█)
-- Color-coded metrics (green/yellow/red)
-- Real-time smooth updates
-
-### 3. Deploy to AWS (production)
-
-### 3. Deploy to AWS (production)
+### Production Deployment
 
 ```bash
 # Configure Terraform
 cp terraform/terraform.tfvars.example terraform/terraform.tfvars
-# Edit terraform.tfvars with your AWS key name
+# Edit with your AWS key name
 
 # Full deployment
 make up
 ```
 
-This will:
-- Build the Go application
-- Create artifact package
-- Provision EC2 instance with Terraform
-- Deploy application with Ansible
-
-### 4. Access the application
-
-After deployment, open:
-```
-http://<your-ec2-ip>
-```
-
-## Architecture
+## Project Structure
 
 ```
-Browser (TUI-style) ← SSE ← Nginx ← Go Backend ← Linux /proc
+mini-btop/
+├── cmd/monitor/              # Go server entry point
+├── internal/metrics/         # System metrics collector
+├── frontend/
+│   ├── src/
+│   │   ├── App.tsx           # Main dashboard
+│   │   ├── components/
+│   │   │   ├── MetricCard.tsx        # Stat card with chart
+│   │   │   ├── DeploymentStatus.tsx  # Terminal log panel
+│   │   │   └── ui/                   # Shadcn components
+│   │   ├── hooks/useSystemMetrics.ts
+│   │   └── types/metrics.ts
+│   └── package.json
+├── static/                   # Built frontend (gitignored)
+├── terraform/                # AWS EC2 infrastructure
+├── ansible/                  # Deployment playbooks
+├── nginx/                    # Nginx config
+├── systemd/                  # Service file
+├── flake.nix                 # Nix dev environment
+└── Makefile
 ```
 
-**Why SSE instead of WebSocket?**
-- Simpler for one-way data flow
-- Auto-reconnect built-in
-- Works better with Nginx
-- Lower overhead
-
-## Development
-
-### Run locally
-
-```bash
-nix develop --impure
-go run ./cmd/monitor
-# Open http://localhost:8080
-```
-
-### Manual Makefile commands
+## Makefile Commands
 
 ```bash
 make artifact    # Build release artifact
 make tf-apply    # Create EC2 infrastructure
 make ans-deploy  # Deploy application
-make up          # Full deployment (all-in-one)
+make up          # Full deployment
 make down        # Destroy infrastructure
-make status      # Check deployment status
 ```
 
-## Tech Stack
+## Metrics Collected
 
-**Backend:**
-- Go 1.25+ with gopsutil for system metrics
-- Server-Sent Events (SSE) for real-time streaming
-- ~200-300ms update interval
-
-**Frontend:**
-- Pure HTML/CSS/JavaScript (no frameworks)
-- Box-drawing characters for TUI look
-- requestAnimationFrame for smooth 60fps updates
-- Linear interpolation for animation
-
-**Infrastructure:**
-- Nix Flakes for reproducible dev environment
-- Terraform for AWS EC2 provisioning
-- Ansible for configuration management
-- systemd for service management
-- Nginx as reverse proxy
-
-## Project Structure
-
-```
-mini-btop/
-├── cmd/monitor/          # Go application entry point
-├── internal/metrics/     # System metrics collector
-├── static/
-│   ├── index.html       # TUI-style interface
-│   ├── css/style.css    # Terminal colors & layout
-│   └── js/app.js        # SSE client & animations
-├── systemd/             # systemd service file
-├── nginx/               # Nginx reverse proxy config
-├── terraform/           # AWS infrastructure (EC2)
-├── ansible/             # Deployment automation
-├── flake.nix           # Nix development environment
-├── Makefile            # Build & deploy commands
-└── README.md
-```
-
-## Features Breakdown
-
-**TUI-style Elements:**
-- `┌─┐│└┘` Box-drawing characters
-- `░▒▓█` Block elements for bars
-- `▁▂▃▄▅▆▇█` Unicode sparklines
-- Terminal color scheme (GitHub Dark)
-- Monospace font rendering
-
-**Metrics Collected:**
-- CPU: Total % + per-core %
-- Memory: Used/Total with %
-- Disk: Usage for / partition
-- Network: RX/TX rates in real-time
-- Load Average: 1/5/15 minute
-- System Uptime
-
-**Performance:**
-- Backend collects every ~250ms
-- Frontend renders at 60fps
-- Smooth interpolation between values
-- History graphs (60 samples)
-- Optimized for low-resource systems
-
-## Why This Stack?
-
-**No Docker:**
-- Lower overhead on t3.micro
-- Direct systemd management
-- Faster cold starts
-
-**Pure JS (no React/Vue):**
-- Minimal bundle size (~10KB)
-- Lower memory footprint
-- Faster page load
-- Direct DOM manipulation for TUI rendering
-
-**SSE over WebSocket:**
-- Unidirectional data flow
-- Built-in reconnection
-- Better Nginx compatibility
-- Simpler implementation
+| Metric | Description |
+|--------|-------------|
+| CPU | Total usage percentage |
+| Memory | Used / Total with percentage |
+| Disk | Root partition usage |
+| Network | RX/TX rates with sparkline |
+| Uptime | System uptime |
+| Load Average | 1/5/15 minute |
 
 ## License
 
