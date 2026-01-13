@@ -1,46 +1,64 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import type { SystemMetrics } from '@/types/metrics';
+
+const MIN_RETRY_DELAY = 1000;  // 1 second
+const MAX_RETRY_DELAY = 30000; // 30 seconds
 
 export function useSystemMetrics() {
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
   const [connected, setConnected] = useState(false);
+  const retryDelayRef = useRef(MIN_RETRY_DELAY);
+  const eventSourceRef = useRef<EventSource | null>(null);
 
-  useEffect(() => {
-    let eventSource: EventSource | null = null;
+  const connect = useCallback(() => {
+    // Close existing connection if any
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+    }
 
-    const connect = () => {
-      eventSource = new EventSource('/api/stream');
+    const eventSource = new EventSource('/api/stream');
+    eventSourceRef.current = eventSource;
 
-      eventSource.onopen = () => {
-        console.log('SSE connected');
-        setConnected(true);
-      };
-
-      eventSource.onerror = (error) => {
-        console.error('SSE error:', error);
-        setConnected(false);
-        eventSource?.close();
-        
-        // Reconnect after 5 seconds
-        setTimeout(connect, 5000);
-      };
-
-      eventSource.onmessage = (event) => {
-        try {
-          const data: SystemMetrics = JSON.parse(event.data);
-          setMetrics(data);
-        } catch (error) {
-          console.error('Parse error:', error);
-        }
-      };
+    eventSource.onopen = () => {
+      console.log('SSE connected');
+      setConnected(true);
+      // Reset retry delay on successful connection
+      retryDelayRef.current = MIN_RETRY_DELAY;
     };
 
+    eventSource.onerror = () => {
+      console.error('SSE error, reconnecting in', retryDelayRef.current, 'ms');
+      setConnected(false);
+      eventSource.close();
+      
+      // Exponential backoff
+      setTimeout(() => {
+        connect();
+      }, retryDelayRef.current);
+      
+      // Increase delay for next retry (exponential backoff with max)
+      retryDelayRef.current = Math.min(retryDelayRef.current * 2, MAX_RETRY_DELAY);
+    };
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data: SystemMetrics = JSON.parse(event.data);
+        setMetrics(data);
+      } catch {
+        // Ignore parse errors (e.g., heartbeat pings)
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     connect();
 
     return () => {
-      eventSource?.close();
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+      }
     };
-  }, []);
+  }, [connect]);
 
   return { metrics, connected };
 }

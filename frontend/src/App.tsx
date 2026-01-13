@@ -1,18 +1,23 @@
 import { useSystemMetrics } from '@/hooks/useSystemMetrics';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { MetricCard } from '@/components/MetricCard';
 import { DeploymentStatus } from '@/components/DeploymentStatus';
 import { Badge } from '@/components/ui/badge';
 import { Cpu, MemoryStick, HardDrive, Wifi, Moon, Sun, Server } from 'lucide-react';
 import { formatBytes, formatGB, formatUptime } from '@/lib/utils';
 
+const HISTORY_SIZE = 20;
+
 function App() {
   const { metrics, connected } = useSystemMetrics();
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   
-  // Network history for sparkline
-  const [networkHistory, setNetworkHistory] = useState<{ value: number }[]>([]);
-  const lastNetworkRef = useRef<number>(0);
+  // Circular buffer for network history - O(1) updates
+  const [networkHistory, setNetworkHistory] = useState<{ value: number }[]>(
+    () => Array(HISTORY_SIZE).fill({ value: 0 })
+  );
+  const historyIndexRef = useRef(0);
+  const lastUpdateRef = useRef(0);
 
   useEffect(() => {
     // Default to dark mode for btop-style
@@ -21,32 +26,37 @@ function App() {
     document.documentElement.classList.toggle('dark', savedTheme === 'dark');
   }, []);
 
-  // Update network history for sparkline
+  // Update network history with circular buffer
   useEffect(() => {
     if (metrics) {
-      const totalRate = metrics.network.rxRate + metrics.network.txRate;
       const now = Date.now();
       
-      // Only add point every 500ms
-      if (now - lastNetworkRef.current > 500) {
-        lastNetworkRef.current = now;
+      // Throttle updates to every 500ms
+      if (now - lastUpdateRef.current > 500) {
+        lastUpdateRef.current = now;
+        const totalRate = (metrics.network.rxRate + metrics.network.txRate) / 1024; // KB/s
+        
         setNetworkHistory(prev => {
-          const newHistory = [...prev, { value: totalRate / 1024 }]; // KB/s
-          if (newHistory.length > 20) {
-            return newHistory.slice(-20);
-          }
+          const newHistory = [...prev];
+          newHistory[historyIndexRef.current] = { value: totalRate };
+          historyIndexRef.current = (historyIndexRef.current + 1) % HISTORY_SIZE;
           return newHistory;
         });
       }
     }
   }, [metrics]);
 
-  const toggleTheme = () => {
-    const newTheme = theme === 'light' ? 'dark' : 'light';
-    setTheme(newTheme);
-    localStorage.setItem('theme', newTheme);
-    document.documentElement.classList.toggle('dark', newTheme === 'dark');
-  };
+  const toggleTheme = useCallback(() => {
+    setTheme(prev => {
+      const newTheme = prev === 'light' ? 'dark' : 'light';
+      localStorage.setItem('theme', newTheme);
+      document.documentElement.classList.toggle('dark', newTheme === 'dark');
+      return newTheme;
+    });
+  }, []);
+
+  // Reorder history for display (oldest to newest)
+  const orderedHistory = [...networkHistory.slice(historyIndexRef.current), ...networkHistory.slice(0, historyIndexRef.current)];
 
   if (!metrics) {
     return (
@@ -143,7 +153,7 @@ function App() {
           subValue={`Down ${formatBytes(metrics.network.rxRate)}/s · Up ${formatBytes(metrics.network.txRate)}/s`}
           icon={Wifi}
           useChart={true}
-          chartData={networkHistory.length > 2 ? networkHistory : [{ value: 0 }, { value: 0 }, { value: 0 }]}
+          chartData={orderedHistory}
           iconColor="text-emerald-500"
           iconBgColor="bg-emerald-500/10 dark:bg-emerald-500/20"
           gradientId="networkGradient"

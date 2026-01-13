@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { Area, AreaChart, ResponsiveContainer } from 'recharts';
 import { LucideIcon } from 'lucide-react';
+
+// Lazy load chart component
+const NetworkChart = lazy(() => import('./NetworkChart'));
 
 interface MetricCardProps {
   title: string;
@@ -18,7 +20,7 @@ interface MetricCardProps {
   useChart?: boolean;
 }
 
-export const MetricCard: React.FC<MetricCardProps> = ({
+export const MetricCard = React.memo<MetricCardProps>(function MetricCard({
   title,
   value,
   subValue,
@@ -30,7 +32,7 @@ export const MetricCard: React.FC<MetricCardProps> = ({
   gradientColor,
   chartData,
   useChart = false,
-}) => {
+}) {
   return (
     <Card className="overflow-hidden border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm hover:shadow-md transition-all duration-300">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -52,26 +54,9 @@ export const MetricCard: React.FC<MetricCardProps> = ({
         )}
 
         {useChart && chartData ? (
-          <div className="h-[40px] w-full mt-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData}>
-                <defs>
-                  <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor={gradientColor} stopOpacity={0.3} />
-                    <stop offset="95%" stopColor={gradientColor} stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <Area
-                  type="monotone"
-                  dataKey="value"
-                  stroke={gradientColor}
-                  strokeWidth={2}
-                  fillOpacity={1}
-                  fill={`url(#${gradientId})`}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
+          <Suspense fallback={<div className="h-[40px] w-full mt-2 bg-zinc-100 dark:bg-zinc-800 rounded animate-pulse" />}>
+            <NetworkChart data={chartData} gradientId={gradientId} gradientColor={gradientColor} />
+          </Suspense>
         ) : (
           <div className="mt-2 space-y-1">
             <Progress value={percent} className="h-2" />
@@ -85,4 +70,4 @@ export const MetricCard: React.FC<MetricCardProps> = ({
       </CardContent>
     </Card>
   );
-};
+});
