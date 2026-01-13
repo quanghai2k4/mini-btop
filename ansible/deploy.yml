@@ -1,0 +1,108 @@
+---
+- name: Deploy mini-btop
+  hosts: mini_btop
+  become: yes
+  vars:
+    app_name: mini-btop
+    app_dir: /opt/mini-btop
+    artifact_path: "../mini-btop-web_{{ version }}_linux_amd64.tar.gz"
+    version: "{{ lookup('env', 'VERSION') | default('latest', true) }}"
+
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install nginx
+      apt:
+        name: nginx
+        state: present
+
+    - name: Create application directory
+      file:
+        path: "{{ app_dir }}"
+        state: directory
+        owner: ubuntu
+        group: ubuntu
+        mode: '0755'
+
+    - name: Stop existing service
+      systemd:
+        name: "{{ app_name }}"
+        state: stopped
+      ignore_errors: yes
+
+    - name: Extract artifact
+      unarchive:
+        src: "{{ artifact_path }}"
+        dest: "{{ app_dir }}"
+        remote_src: no
+        owner: ubuntu
+        group: ubuntu
+        extra_opts: [--strip-components=1]
+
+    - name: Make binary executable
+      file:
+        path: "{{ app_dir }}/monitor"
+        mode: '0755'
+
+    - name: Copy systemd service file
+      copy:
+        src: "{{ app_dir }}/systemd/mini-btop.service"
+        dest: /etc/systemd/system/mini-btop.service
+        remote_src: yes
+        mode: '0644'
+
+    - name: Copy nginx config
+      copy:
+        src: "{{ app_dir }}/nginx/mini-btop.conf"
+        dest: /etc/nginx/sites-available/mini-btop.conf
+        remote_src: yes
+        mode: '0644'
+
+    - name: Enable nginx site
+      file:
+        src: /etc/nginx/sites-available/mini-btop.conf
+        dest: /etc/nginx/sites-enabled/mini-btop.conf
+        state: link
+
+    - name: Remove default nginx site
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+
+    - name: Test nginx configuration
+      command: nginx -t
+      register: nginx_test
+      changed_when: false
+
+    - name: Reload systemd
+      systemd:
+        daemon_reload: yes
+
+    - name: Enable and start mini-btop service
+      systemd:
+        name: "{{ app_name }}"
+        state: started
+        enabled: yes
+
+    - name: Restart nginx
+      systemd:
+        name: nginx
+        state: restarted
+
+    - name: Wait for service to be ready
+      wait_for:
+        port: 8080
+        delay: 2
+        timeout: 30
+
+    - name: Check service status
+      systemd:
+        name: "{{ app_name }}"
+      register: service_status
+
+    - name: Display service status
+      debug:
+        msg: "mini-btop service is {{ service_status.status.ActiveState }}"
